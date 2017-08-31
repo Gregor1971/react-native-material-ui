@@ -1,21 +1,23 @@
 /* eslint-disable import/no-unresolved, import/extensions */
-import React, { PureComponent } from 'react';
-import PropTypes from 'prop-types';
+import React, { PureComponent, PropTypes } from 'react';
 import {
     Animated,
     Easing,
     Platform,
+    BackAndroid as DeprecatedBackAndroid,
+    BackHandler,
     StyleSheet,
     Text,
     View,
 } from 'react-native';
-import { ViewPropTypes, BackAndroid } from '../utils';
 /* eslint-enable import/no-unresolved, import/extensions */
 import LeftElement from './LeftElement.react';
 import CenterElement from './CenterElement.react';
 import RightElement from './RightElement.react';
 import IconToggle from '../IconToggle';
 import isFunction from '../utils/isFunction';
+
+const BackAndroid = BackHandler || DeprecatedBackAndroid;
 
 const propTypes = {
     /**
@@ -63,12 +65,12 @@ const propTypes = {
     * You can overide any style for the component via this prop
     */
     style: PropTypes.shape({
-        container: ViewPropTypes.style,
-        leftElementContainer: ViewPropTypes.style,
+        container: View.propTypes.style,
+        leftElementContainer: View.propTypes.style,
         leftElement: IconToggle.propTypes.style,
-        centerElementContainer: ViewPropTypes.style,
+        centerElementContainer: View.propTypes.style,
         titleText: Text.propTypes.style,
-        rightElementContainer: ViewPropTypes.style,
+        rightElementContainer: View.propTypes.style,
         rightElement: IconToggle.propTypes.style,
     }),
     /**
@@ -143,28 +145,13 @@ const defaultProps = {
     elevation: 4, // TODO: probably useless, elevation is defined in getTheme function
     style: {},
     hidden: false,
-    isSearchActive: false,
-    onRightElementPress: null,
-    rightElement: null,
-    searchable: null,
-    onPress: null,
-    centerElement: null,
-    leftElement: null,
-    onLeftElementPress: null,
-    size: 24,
 };
 const contextTypes = {
     uiTheme: PropTypes.object.isRequired,
 };
 
-const EMPTY_BACK_BUTTON_LISTENER = { remove: () => {} };
-const getBackButtonListener = (callback, isSearchActive) => {
-    // if search is active by default we need to listen back button
-    if (isSearchActive) {
-        return BackAndroid.addEventListener('closeRequested', callback);
-    }
-
-    return EMPTY_BACK_BUTTON_LISTENER;
+const getBackButtonListener = (callback) => {
+    return BackAndroid.addEventListener('hardwareBackPress', callback);
 };
 // const isSearchable = props => (props.searchable && props.isSearchActive) || false;
 // const getIsSearchActive = (props, state) => (props.searchable && state.isSearchActive) || false;
@@ -185,10 +172,7 @@ class Toolbar extends PureComponent {
         super(props);
 
         const isSearchActive = props.isSearchActive || false;
-        this.backButtonListener = getBackButtonListener(
-            this.onSearchCloseRequested,
-            isSearchActive,
-        );
+        this.backButtonListener = isSearchActive ? getBackButtonListener(this.onSearchCloseRequested) : null;
 
         this.state = {
             // indicates if searc is activated
@@ -207,12 +191,6 @@ class Toolbar extends PureComponent {
         };
     }
     componentWillReceiveProps(nextProps) {
-        // if search is active and we clicked on the results which does not allow search
-        // then close the previous search.
-        if (this.state.isSearchActive && !nextProps.searchable) {
-            this.onSearchCloseRequested();
-        }
-
         // there should be also posibility to change search through props, so we need to check
         // props first and then we should check state if we need to change search state
         if (this.props.isSearchActive !== nextProps.isSearchActive) {
@@ -249,7 +227,7 @@ class Toolbar extends PureComponent {
             this.state.defaultScaleValue.setValue(0.01);
             this.setState({ order: 'searchFirst' });
             // on android it's typical that back button closes search input on toolbar
-            this.backButtonListener = getBackButtonListener(this.onSearchCloseRequested, true);
+            this.backButtonListener = getBackButtonListener(this.onSearchCloseRequested);
         });
     }
     onSearchPressed = () => {
@@ -286,8 +264,6 @@ class Toolbar extends PureComponent {
             // default scale set up back to "hidden" value
             this.state.searchScaleValue.setValue(0.01);
             this.setState({ order: 'defaultFirst' });
-            // on android it's typical that back button closes search input on toolbar
-            this.backButtonListener = getBackButtonListener(this.onSearchCloseRequested, false);
 
             this.onSearchClosed();
         });
@@ -297,7 +273,10 @@ class Toolbar extends PureComponent {
     onSearchClosed = () => {
         const { searchable } = this.props;
 
-        this.backButtonListener.remove();
+        if (this.backButtonListener) {
+            // BackAndroid.removeEventListener('hardwareBackPress', this.backButtonListener);
+            this.backButtonListener.remove();
+        }
 
         if (searchable && isFunction(searchable.onSearchClosed)) {
             searchable.onSearchClosed();
@@ -464,6 +443,7 @@ class Toolbar extends PureComponent {
             </Animated.View>
         );
     }
+
 }
 
 Toolbar.propTypes = propTypes;
